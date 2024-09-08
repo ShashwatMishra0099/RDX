@@ -8,9 +8,9 @@ from pyrogram.types import Message
 # Initialize the bot client with your API ID and API hash from Telegram
 app = Client(
     "music_bot",
-    api_id=os.environ["API_ID"],
-    api_hash=os.environ["API_HASH"],
-    bot_token=os.environ["BOT_TOKEN"]
+    api_id=os.environ["28165213"],
+    api_hash=os.environ["74983137f88bb852802637dadf3d44a3"],
+    bot_token=os.environ["7397084299:AAGzcPONLSvrdlHNYiQBsJXEV3TwGdPu_aY"]
 )
 
 # Function to download the audio from YouTube
