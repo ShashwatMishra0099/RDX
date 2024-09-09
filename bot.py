@@ -1,82 +1,48 @@
-import os
-from pyrogram import Client, filters
-from youtube_dl import YoutubeDL
+from telethon import TelegramClient, events
+from pytgcalls import PyTgCalls, idle
+from pytgcalls.types import Update
+from pytgcalls.types.input_stream import InputAudioStream
+import youtube_dl
 import ffmpeg
-import asyncio
-from pyrogram.types import Message
+import os
 
-# Initialize the bot client with your API ID and API hash from Telegram
-app = Client(
-    "music_bot",
-    api_id=os.environ["28165213"],
-    api_hash=os.environ["74983137f88bb852802637dadf3d44a3"],
-    bot_token=os.environ["7397084299:AAGzcPONLSvrdlHNYiQBsJXEV3TwGdPu_aY"]
-)
+# Bot credentials
+api_id = os.getenv("28165213")  # Replace with your API ID or set it in Heroku Config Vars
+api_hash = os.getenv("74983137f88bb852802637dadf3d44a3")  # Replace with your API Hash or set it in Heroku Config Vars
+bot_token = os.getenv("7397084299:AAGzcPONLSvrdlHNYiQBsJXEV3TwGdPu_aY")  # Replace with your Bot Token or set it in Heroku Config Vars
 
-# Function to download the audio from YouTube
-def download_from_youtube(query):
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'noplaylist': True,
-        'quiet': True,
-        'extractaudio': True,
-        'audioformat': 'mp3',
-    }
-    with YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.extract_info(query, download=False)
-        return info_dict['url'], info_dict['title']
+# Initialize Telegram bot client
+bot = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
 
+# Initialize PyTgCalls for voice chat
+pytgcalls = PyTgCalls(bot)
 
-# Command to play a song
-@app.on_message(filters.command("play"))
-async def play_song(client: Client, message: Message):
-    query = message.text.split(" ", 1)[1]
+# Join voice chat and stream music via FFmpeg
+@bot.on(events.NewMessage(pattern='/play'))
+async def play_music(event):
+    chat_id = event.chat_id
 
-    await message.reply("Searching for the song...")
+    # Get the song name or URL
+    song_name = event.text.split(" ", 1)[1]
 
-    # Download or stream the song from YouTube
-    url, title = download_from_youtube(f"ytsearch:{query}")
+    # Use youtube_dl to download the audio stream
+    ydl_opts = {'format': 'bestaudio', 'noplaylist': True}
+    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(f"ytsearch:{song_name}", download=False)
+        url = info['entries'][0]['url']
 
-    await message.reply(f"Playing: {title}")
-
-    # Join the voice chat (replace "your_chat_id" with the actual chat ID)
-    chat_id = message.chat.id
-    voice_chat = await client.get_chat(chat_id)
-    await client.join_voice_chat(chat_id)
-
-    # Stream the audio using FFmpeg
-    process = (
-        ffmpeg
-        .input(url)
-        .output("pipe:1", format="mp3")
-        .run_async(pipe_stdout=True)
+    # Join the voice chat
+    await pytgcalls.join_group_call(
+        chat_id,
+        InputAudioStream(
+            ffmpeg.input(url).output('-', format='s16le', acodec='pcm_s16le', ac=2, ar='48k').run_async(pipe_stdout=True)
+        )
     )
 
-    await asyncio.sleep(10)  # Simulate song playing for 10 seconds
-    process.terminate()
+    await event.respond(f"Playing: {info['entries'][0]['title']}")
 
+# Start the PyTgCalls client
+pytgcalls.start()
 
-# Command to pause the song
-@app.on_message(filters.command("pause"))
-async def pause_song(client: Client, message: Message):
-    # In a real implementation, you'd control FFmpeg's process here
-    await message.reply("Pausing the song...")
-
-
-# Command to skip the song
-@app.on_message(filters.command("skip"))
-async def skip_song(client: Client, message: Message):
-    # Terminate FFmpeg process here
-    await message.reply("Skipping the song...")
-
-
-# Command to stop the bot and leave the voice chat
-@app.on_message(filters.command("stop"))
-async def stop_song(client: Client, message: Message):
-    chat_id = message.chat.id
-    await client.leave_voice_chat(chat_id)
-    await message.reply("Stopped the music and left the voice chat.")
-
-
-# Start the bot
-app.run()
+# Idle to keep the bot running
+idle()
