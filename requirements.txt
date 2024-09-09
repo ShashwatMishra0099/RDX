@@ -1,4 +1,4 @@
-pyrogram
+pyrogram==2.0.30
 youtube_dl
 ffmpeg-python
 aiohttp
